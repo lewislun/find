@@ -29,11 +29,15 @@ import (
 // $GOPATH/bin/ffjson fingerprint.go
 // find ./ -name "*.go" -type f | xargs sed -i  's/package main/package main/g'
 // Comment json.Marshal/Unmarshal functions
+//Windows:
+//powershell -Command "get-childitem ./ -filter *.go | foreach-object { (Get-Content $_.fullname) -replace 'package <hehe>main', 'package <hehe>find' | Set-Content $_.fullname }"  (omit the <hehe>)
 type Fingerprint struct {
 	Group           string   `json:"group"`
 	Username        string   `json:"username"`
 	Location        string   `json:"location"`
 	Timestamp       int64    `json:"timestamp"`
+	X               string   `json:"x"`
+	Y               string   `json:"y"`
 	WifiFingerprint []Router `json:"wifi-fingerprint"`
 }
 
@@ -167,7 +171,11 @@ func learnFingerprintPOST(c *gin.Context) {
 		if !success {
 			Debug.Println(jsonFingerprint)
 		}
-		c.JSON(http.StatusOK, gin.H{"message": message, "success": success})
+		c.JSON(http.StatusOK, gin.H{
+			"message":       message,
+			"received obj:": jsonFingerprint,
+			"success":       success,
+		})
 	} else {
 		Warning.Println("Could not bind JSON")
 		c.JSON(http.StatusOK, gin.H{"message": "Could not bind JSON", "success": false})
