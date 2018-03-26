@@ -9,6 +9,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -106,6 +107,38 @@ func getUniqueMacs(group string) []string {
 		return nil
 	})
 	return uniqueMacs
+}
+
+func setLocationXY(group string, location string, x string, y string) {
+	db, err := bolt.Open(path.Join(RuntimeArgs.SourcePath, group+".db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	db.Update(func(tx *bolt.Tx) error {
+		b, bucketErr := tx.CreateBucketIfNotExists([]byte("xy"))
+		if bucketErr != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+
+		return b.Put([]byte(location), []byte(x+"/"+y))
+	})
+}
+
+func getLocationXY(group string, location string) (string, string) {
+	db, err := bolt.Open(path.Join(RuntimeArgs.SourcePath, group+".db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	var xy []string
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("xy"))
+		v := string(b.Get([]byte(location)))
+		xy = strings.Split(v, "/")
+		return nil
+	})
+	return xy[0], xy[1]
 }
 
 func getUniqueLocations(group string) (uniqueLocs []string) {

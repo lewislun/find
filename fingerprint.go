@@ -145,9 +145,9 @@ func trackFingerprintPOST(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 	var jsonFingerprint Fingerprint
 	if c.BindJSON(&jsonFingerprint) == nil {
-		message, success, locationGuess, bayes, svm, rf := trackFingerprint(jsonFingerprint)
+		message, success, locationGuess, x, y, bayes, svm, rf := trackFingerprint(jsonFingerprint)
 		if success {
-			c.JSON(http.StatusOK, gin.H{"message": message, "success": true, "location": locationGuess, "bayes": bayes, "svm": svm, "rf": rf})
+			c.JSON(http.StatusOK, gin.H{"message": message, "success": true, "location": locationGuess, "bayes": bayes, "svm": svm, "rf": rf, "x": x, "y": y})
 		} else {
 			c.JSON(http.StatusOK, gin.H{"message": message, "success": false})
 		}
@@ -172,9 +172,8 @@ func learnFingerprintPOST(c *gin.Context) {
 			Debug.Println(jsonFingerprint)
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message":       message,
-			"received obj:": jsonFingerprint,
-			"success":       success,
+			"message": message,
+			"success": success,
 		})
 	} else {
 		Warning.Println("Could not bind JSON")
@@ -191,12 +190,14 @@ func learnFingerprint(jsonFingerprint Fingerprint) (string, bool) {
 		return "No fingerprints found to insert, see API", false
 	}
 	putFingerprintIntoDatabase(jsonFingerprint, "fingerprints")
+	setLocationXY(jsonFingerprint.Group, jsonFingerprint.Location, jsonFingerprint.X, jsonFingerprint.Y)
+
 	go setLearningCache(strings.ToLower(jsonFingerprint.Group), true)
 	message := "Inserted fingerprint containing " + strconv.Itoa(len(jsonFingerprint.WifiFingerprint)) + " APs for " + jsonFingerprint.Username + " (" + jsonFingerprint.Group + ") at " + jsonFingerprint.Location
 	return message, true
 }
 
-func trackFingerprint(jsonFingerprint Fingerprint) (string, bool, string, map[string]float64, map[string]float64, map[string]float64) {
+func trackFingerprint(jsonFingerprint Fingerprint) (string, bool, string, string, string, map[string]float64, map[string]float64, map[string]float64) {
 	// Classify with filter fingerprint
 	fullFingerprint := jsonFingerprint
 	filterFingerprint(&jsonFingerprint)
@@ -205,13 +206,13 @@ func trackFingerprint(jsonFingerprint Fingerprint) (string, bool, string, map[st
 	svmData := make(map[string]float64)
 	cleanFingerprint(&jsonFingerprint)
 	if !groupExists(jsonFingerprint.Group) || len(jsonFingerprint.Group) == 0 {
-		return "You should insert fingerprints before tracking", false, "", bayes, make(map[string]float64), make(map[string]float64)
+		return "You should insert fingerprints before tracking", false, "", "", "", bayes, make(map[string]float64), make(map[string]float64)
 	}
 	if len(jsonFingerprint.WifiFingerprint) == 0 {
-		return "No fingerprints found to track, see API", false, "", bayes, make(map[string]float64), make(map[string]float64)
+		return "No fingerprints found to track, see API", false, "", "", "", bayes, make(map[string]float64), make(map[string]float64)
 	}
 	if len(jsonFingerprint.Username) == 0 {
-		return "No username defined, see API", false, "", bayes, make(map[string]float64), make(map[string]float64)
+		return "No username defined, see API", false, "", "", "", bayes, make(map[string]float64), make(map[string]float64)
 	}
 	wasLearning, ok := getLearningCache(strings.ToLower(jsonFingerprint.Group))
 	if ok {
@@ -278,6 +279,7 @@ func trackFingerprint(jsonFingerprint Fingerprint) (string, bool, string, map[st
 	}
 
 	// Send out the final responses
+	x, y := getLocationXY(jsonFingerprint.Group, locationGuess1)
 	var userJSON UserPositionJSON
 	userJSON.Location = locationGuess1
 	userJSON.Bayes = bayes
@@ -288,6 +290,6 @@ func trackFingerprint(jsonFingerprint Fingerprint) (string, bool, string, map[st
 	}
 	go setUserPositionCache(strings.ToLower(jsonFingerprint.Group)+strings.ToLower(jsonFingerprint.Username), userJSON)
 
-	return message, true, locationGuess1, bayes, svmData, userJSON.Rf
+	return message, true, locationGuess1, x, y, bayes, svmData, userJSON.Rf
 
 }
